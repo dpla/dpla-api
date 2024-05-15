@@ -65,13 +65,14 @@ function worker() {
   });
 
   const elasticsearch =
-    process.env.ELASTIC_URL || "http://search-prod1.internal.dp.la:9200/";
+    process.env.ELASTIC_URL || "http://search-prod.internal.dp.la:9200/";
 
   const esClient: Client = new Client({
     node: elasticsearch,
     maxRetries: 5,
     requestTimeout: 60000,
     sniffOnStart: true,
+    sniffOnConnectionFault: true,
   });
 
   const healthController = new HealthController();
