@@ -11,6 +11,7 @@ import { Client } from "@elastic/elasticsearch";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { S3Client } from "@aws-sdk/client-s3";
 import https from "https";
+import SearchController from "./controllers/search";
 
 const mustFork =
   process.env.MUST_FORK === "true" || process.env.NODE_ENV === "production";
@@ -37,16 +38,28 @@ function primary() {
 
 function worker() {
   const PORT = process.env.PORT || 8000;
+  const region = process.env.AWS_REGION || "us-east-1";
+  const thumbnailBucket = process.env.BUCKET || "dpla-thumbnails";
+  const xray = process.env.XRAY === "true";
+  const dbHost = process.env.DB_HOST;
+  const dbName = process.env.DB_NAME;
+  const dbUser = process.env.DB_USER;
+  const dbPass = process.env.DB_PASS;
+  const dbPort = parseInt(process.env.DB_PORT || "5432");
+  const elasticsearchUrl =
+    process.env.ELASTIC_URL || "http://search-prod.internal.dp.la:9200/";
+  const elasticsearchIndex = process.env.ELASTIC_INDEX || "dpla_alias";
 
   const app: Application = express();
-  app.use(morgan("tiny"));
+  app.use(morgan("tiny")); //http request logger
+  app.disable("x-powered-by");
 
-  const awsOptions = { region: process.env.REGION || "us-east-1" };
-  const thumbnailBucket = process.env.BUCKET || "dpla-thumbnails";
+  const awsOptions = { region };
+
   let s3 = new S3Client(awsOptions);
   let sqs = new SQSClient(awsOptions);
 
-  if (process.env.XRAY === "true") {
+  if (xray) {
     const XRayExpress = AWSXRay.express;
     app.use(XRayExpress.openSegment("dpla-api"));
     AWSXRay.config([AWSXRay.plugins.ECSPlugin]);
@@ -56,32 +69,31 @@ function worker() {
     s3 = AWSXRay.captureAWSClient(s3);
   }
 
-  const pool: Pool = new Pool({
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASS,
-    port: parseInt(process.env.DB_PORT || "5432"),
+  const dbPool: Pool = new Pool({
+    host: dbHost,
+    database: dbName,
+    user: dbUser,
+    password: dbPass,
+    port: dbPort,
   });
 
-  const elasticsearch =
-    process.env.ELASTIC_URL || "http://search-prod.internal.dp.la:9200/";
-
   const esClient: Client = new Client({
-    node: elasticsearch,
+    node: elasticsearchUrl,
     maxRetries: 5,
     requestTimeout: 60000,
     sniffOnStart: true,
     sniffOnConnectionFault: true,
   });
 
+  // HEALTH
   const healthController = new HealthController();
 
-  app.get("/health", async (_req, res) => {
+  app.get("/health", async (req, res) => {
     const response = await healthController.getHealth();
     return res.send(response);
   });
 
+  //THUMBNAILS
   const thumbnailController = new ThumbnailController(
     thumbnailBucket,
     s3,
@@ -90,7 +102,17 @@ function worker() {
   );
 
   app.get("/thumb/*", async (_req, res) => {
-    const response = await thumbnailController.handle(_req, res);
+    await thumbnailController.handle(_req, res);
+  });
+
+  //SEARCH
+  const searchController = new SearchController(esClient);
+
+  app.get("/v2/item/:id", async (req, res) => {
+    const response = await searchController.getItem(
+      req.params.id,
+      elasticsearchIndex,
+    );
     return res.send(response);
   });
 
