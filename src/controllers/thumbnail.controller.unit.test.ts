@@ -111,8 +111,8 @@ test("isProbablyURL", async () => {
 
 test("getCacheHeaders", async () => {
   const result = thumb.getCacheHeaders(2);
-  expect(result.get("Cache-Control")).toBe("public, max-age=2");
-  expect(result.get("Expires")).toMatch(
+  expect(result["Cache-Control"]).toBe("public, max-age=2");
+  expect(result["Expires"]).toMatch(
     /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\W\d{2}\W(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\W\d{4}\W\d{2}:\d{2}:\d{2}\WGMT$/,
   );
 });
@@ -158,12 +158,10 @@ test("setHeadersFromTarget", async () => {
   headers.append("Content-Encoding", "text/plain");
   headers.append("Last-Modified", "Wed, 21 Oct 2015 07:28:00 GMT");
   const responseHeaders = thumb.getHeadersFromTarget(headers);
-  expect(responseHeaders.get("Last-Modified")).toBe(
-    headers.get("Last-Modified"),
-  );
-  expect(responseHeaders.get("foo")).toBeFalsy();
-  expect(responseHeaders.get("bar")).toBeFalsy();
-  expect(responseHeaders.get("Content-Encoding")).toBeFalsy();
+  expect(responseHeaders["last-modified"]).toBe(headers.get("Last-Modified"));
+  expect(responseHeaders["foo"]).toBeFalsy();
+  expect(responseHeaders["bar"]).toBeFalsy();
+  expect(responseHeaders["Content-Encoding"]).toBeFalsy();
 });
 
 test("getImageStatusCode", () => {

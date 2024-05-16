@@ -11,8 +11,9 @@ import {
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { OutgoingHttpHeaders } from "node:http";
 
-const LONG_CACHE_TIME: number = 60 * 60 * 24 * 30; //seconds
+const LONG_CACHE_TIME: number = 60 * 60 * 24 * 30; // 30 days in seconds
 const SHORT_CACHE_TIME = 60; //seconds
 const IMAGE_REQUEST_TIMEOUT = 10000; //ms
 
@@ -32,7 +33,6 @@ export default class ThumbnailController {
     this.esClient = esClient;
   }
 
-  //todo refactor to non-express api
   async handle(req: express.Request, res: express.Response): Promise<void> {
     const itemId: string | null = this.getItemId(req.path) as string;
 
@@ -156,9 +156,10 @@ export default class ThumbnailController {
 
       const headers = this.getHeadersFromTarget(remoteImageResponse.headers);
 
-      if (headers.get("Content-Type")) {
-        const contentType = headers.get("Content-Type") || "nope";
+      if (headers && headers.hasOwnProperty("content-type")) {
+        const contentType = headers["Content-Type"];
         if (
+          contentType &&
           !contentType.startsWith("image") &&
           !contentType.endsWith("octet-stream")
         ) {
@@ -322,14 +323,14 @@ export default class ThumbnailController {
   //parameterized because we want provider errors to be cached for a shorter time
   //whereas s3 responses should live there for a long time
   //see LONG_CACHE_TIME and SHORT_CACHE_TIME, above
-  getCacheHeaders(seconds: number): Map<string, string> {
+  getCacheHeaders(seconds: number): OutgoingHttpHeaders {
     const now = new Date().getTime();
     const expirationDateString = new Date(now + 1000 * seconds).toUTCString();
     const cacheControl = `public, max-age=${seconds}`;
-    return new Map([
-      ["Cache-Control", cacheControl],
-      ["Expires", expirationDateString],
-    ]);
+    return {
+      "Cache-Control": cacheControl,
+      Expires: expirationDateString,
+    };
   }
 
   //issues async request for the image (could be s3 or provider)
@@ -343,19 +344,16 @@ export default class ThumbnailController {
   }
 
   //providers/s3 could set all sorts of weird headers, but we only want to pass along a few
-  getHeadersFromTarget(headers: Headers): Map<string, string> {
-    const result = new Map();
-
+  getHeadersFromTarget(headers: Headers): any {
     // Reduce headers to just those that we want to pass through
-    const contentType = "Content-Type";
-    if (headers.has(contentType)) {
-      result.set(contentType, headers.get(contentType));
-    }
+    const validHeaderKeys = ["content-type", "last-modified"];
+    let result: { [key: string]: any } = {};
 
-    const lastModified = "Last-Modified";
-    if (headers.has(lastModified)) {
-      result.set(lastModified, headers.get(lastModified));
-    }
+    validHeaderKeys.forEach((key) => {
+      if (headers.has(key) && headers.get(key)) {
+        result[key] = headers.get(key);
+      }
+    });
 
     return result;
   }
