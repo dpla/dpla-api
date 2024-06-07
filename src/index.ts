@@ -4,14 +4,14 @@ import os from "os";
 import { Pool } from "pg";
 import morgan from "morgan";
 
-import HealthController from "./controllers/health";
-import ThumbnailController from "./controllers/thumbnail";
+import HealthController from "./health/health";
+import ThumbnailController from "./thumbnails/thumbnail";
 import AWSXRay from "aws-xray-sdk";
 import { Client } from "@elastic/elasticsearch";
 import { SQSClient } from "@aws-sdk/client-sqs";
 import { S3Client } from "@aws-sdk/client-s3";
 import https from "https";
-import SearchController from "./controllers/search";
+import SearchController from "./aggregation/search";
 
 const mustFork =
   process.env.MUST_FORK === "true" || process.env.NODE_ENV === "production";
@@ -47,7 +47,7 @@ function worker() {
   const dbPass = process.env.DB_PASS;
   const dbPort = parseInt(process.env.DB_PORT || "5432");
   const elasticsearchUrl =
-    process.env.ELASTIC_URL || "http://search-prod.internal.dp.la:9200/";
+    process.env.ELASTIC_URL || "http://search.internal.dp.la:9200/";
   const elasticsearchIndex = process.env.ELASTIC_INDEX || "dpla_alias";
 
   const app: Application = express();
@@ -85,6 +85,21 @@ function worker() {
     sniffOnConnectionFault: true,
   });
 
+  const queryParams = (req: express.Request): Map<string, string> => {
+    const params = new Map<string, string>();
+    for (const key in Object.entries(req.query)) {
+      if (req.query.hasOwnProperty(key)) {
+        const value = req.query[key];
+        if (typeof value === "string") {
+          params.set(key, value);
+        } else if (Array.isArray(value)) {
+          params.set(key, value[0] as string);
+        }
+      }
+    }
+    return params;
+  };
+
   // HEALTH
   const healthController = new HealthController();
 
@@ -108,12 +123,40 @@ function worker() {
   //SEARCH
   const searchController = new SearchController(esClient);
 
-  app.get("/v2/item/:id", async (req, res) => {
-    const response = await searchController.getItem(
-      req.params.id,
-      elasticsearchIndex,
-    );
-    return res.send(response);
+  app.get("/v2/items/:id", async (req, res) => {
+    try {
+      const response = await searchController.getItem(
+        req.params.id,
+        queryParams(req),
+        elasticsearchIndex,
+      );
+      return res.send(response);
+      //todo should badresponse not be a reject
+    } catch (e: any) {
+      //todo should this crash
+      if (e.hasOwnProperty("message")) {
+        return res.status(500).send(e.message);
+      } else {
+        return res.status(500);
+      }
+    }
+  });
+
+  app.get("/v2/search", async (req, res) => {
+    try {
+      const response = await searchController.search(
+        queryParams(req),
+        elasticsearchIndex,
+      );
+      return res.send(response);
+    } catch (e: any) {
+      console.log("IN Catch", e);
+      if (e.hasOwnProperty("message")) {
+        return res.status(500).send(e.message);
+      } else {
+        return res.status(500);
+      }
+    }
   });
 
   app.listen(PORT, () => {
