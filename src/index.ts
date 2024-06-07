@@ -135,7 +135,7 @@ function worker() {
     } catch (e: any) {
       //todo should this crash
       if (e.hasOwnProperty("message")) {
-        return res.status(500).send(e.message);
+        return res.status(500).json(e.message);
       } else {
         return res.status(500);
       }
@@ -152,7 +152,7 @@ function worker() {
     } catch (e: any) {
       console.log("IN Catch", e);
       if (e.hasOwnProperty("message")) {
-        return res.status(500).send(e.message);
+        return res.status(500).json(e.message);
       } else {
         return res.status(500);
       }
