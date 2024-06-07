@@ -57,7 +57,7 @@ const minPage = 1;
 const maxPage = 100;
 const defaultPageSize = 10;
 const minPageSize = 0;
-const maxPageSize = 2;
+const maxPageSize = 500;
 const defaultSortOrder = "asc";
 
 export const acceptedSearchParams: string[] = [
