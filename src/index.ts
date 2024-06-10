@@ -13,14 +13,10 @@ import { S3Client } from "@aws-sdk/client-s3";
 import https from "https";
 import SearchController from "./aggregation/search";
 import {
-  InvalidParameter,
-  TooManyIdentifiers,
-  UnrecognizedParameters,
   DPLADocList,
   FourHundredResponse,
   FiveHundredResponse,
 } from "./aggregation/responses";
-import e from "express";
 
 const mustFork =
   process.env.MUST_FORK === "true" || process.env.NODE_ENV === "production";
