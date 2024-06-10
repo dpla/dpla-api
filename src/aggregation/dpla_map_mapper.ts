@@ -1,31 +1,5 @@
 import { SearchParams } from "./param_validator";
-
-export interface DPLADocList {
-  count?: number;
-  limit?: number;
-  start?: number;
-  docs: any[];
-  facets?: FacetList;
-}
-
-interface FacetList {
-  facets: Facet[];
-}
-
-interface Facet {
-  field: string;
-  type: string;
-  buckets: Bucket[];
-  bucketsLabel: String;
-}
-
-interface Bucket {
-  key?: string;
-  keyAsString?: string;
-  docCount?: number;
-  from?: number;
-  to?: number;
-}
+import { DPLADocList } from "./responses";
 
 export function mapSearchResponse(
   response: any,
@@ -45,10 +19,8 @@ export function mapSearchResponse(
     const start = getStart(searchParams.page, searchParams.pageSize);
     const limit = searchParams.pageSize;
 
-    const results: any = {
-      count: mapped.length,
-      docs: mapped,
-    };
+    const results: DPLADocList = new DPLADocList(mapped);
+    results.count = mapped.length;
 
     start && (results.start = start);
     limit && (results.limit = limit);

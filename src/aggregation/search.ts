@@ -1,14 +1,16 @@
 import { Client } from "@elastic/elasticsearch";
 import { getFetchIds, getSearchParams } from "./param_validator";
 import { composeMultiFetchQuery, composeSearchQuery } from "./query_builder";
-import { DPLADocList, mapSearchResponse } from "./dpla_map_mapper";
+import { mapSearchResponse } from "./dpla_map_mapper";
 
 import {
-  BadResponse,
-  InternalError,
+  FourHundredResponse,
+  InternalErrorResponse,
   InvalidParameter,
   TooManyIdentifiers,
   UnrecognizedParameters,
+  DPLADocList,
+  FiveHundredResponse,
 } from "./responses";
 
 export default class SearchController {
@@ -22,7 +24,7 @@ export default class SearchController {
     itemID: string,
     queryParams: Map<string, string>,
     indexName: string,
-  ): Promise<DPLADocList | BadResponse> {
+  ): Promise<DPLADocList | FourHundredResponse | FiveHundredResponse> {
     const potentialFetchIds = getFetchIds(itemID, queryParams);
 
     if (
@@ -30,29 +32,31 @@ export default class SearchController {
       potentialFetchIds instanceof TooManyIdentifiers ||
       potentialFetchIds instanceof InvalidParameter
     ) {
-      return Promise.reject(potentialFetchIds);
+      return Promise.resolve(potentialFetchIds);
     }
 
     // multi-fetch
     const query = composeMultiFetchQuery(potentialFetchIds);
 
+    let response;
+
     try {
-      const response = await this.esClient.search({
+      response = await this.esClient.search({
         index: indexName,
         body: query,
       });
-
-      return mapSearchResponse(response.body);
     } catch (e: any) {
-      // problem communicating with elasticsearch
-      return Promise.reject(new InternalError());
+      console.log("Caught error from ES request. Item ID:", itemID, e);
+      return Promise.resolve(new InternalErrorResponse());
     }
+
+    return mapSearchResponse(response.body);
   }
 
   public async search(
     queryParams: Map<string, string>,
     indexName: string,
-  ): Promise<DPLADocList | BadResponse> {
+  ): Promise<DPLADocList | FourHundredResponse | FiveHundredResponse> {
     const searchParams = getSearchParams(queryParams);
 
     if (
@@ -64,10 +68,17 @@ export default class SearchController {
 
     const query = composeSearchQuery(searchParams);
 
-    const response = await this.esClient.search({
-      index: indexName,
-      body: query,
-    });
+    let response;
+
+    try {
+      response = await this.esClient.search({
+        index: indexName,
+        body: query,
+      });
+    } catch (e: any) {
+      console.log("Caught error from ES request. Query:", query, e);
+      return Promise.resolve(new InternalErrorResponse());
+    }
 
     return mapSearchResponse(response.body, query);
   }
