@@ -145,7 +145,7 @@ function worker() {
     }
   };
 
-  app.get("/v2/items/:id", async (req, res) => {
+  app.get(["/v2/items/:id", "/items/:id"], async (req, res) => {
     console.log("IN: /v2/items/:id");
     const response = await searchController.getItem(
       req.params.id,
@@ -156,7 +156,7 @@ function worker() {
     handleJsonResponses(response, res);
   });
 
-  app.get("/v2/search", async (req, res) => {
+  app.get(["/v2/items", "/items"], async (req, res) => {
     const response = await searchController.search(
       queryParams(req),
       elasticsearchIndex,
