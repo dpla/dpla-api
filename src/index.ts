@@ -12,6 +12,15 @@ import { SQSClient } from "@aws-sdk/client-sqs";
 import { S3Client } from "@aws-sdk/client-s3";
 import https from "https";
 import SearchController from "./aggregation/search";
+import {
+  InvalidParameter,
+  TooManyIdentifiers,
+  UnrecognizedParameters,
+  DPLADocList,
+  FourHundredResponse,
+  FiveHundredResponse,
+} from "./aggregation/responses";
+import e from "express";
 
 const mustFork =
   process.env.MUST_FORK === "true" || process.env.NODE_ENV === "production";
@@ -122,41 +131,38 @@ function worker() {
 
   //SEARCH
   const searchController = new SearchController(esClient);
+  const handleJsonResponses = (
+    response: DPLADocList | FourHundredResponse | FiveHundredResponse,
+    res: express.Response,
+  ) => {
+    if (
+      response instanceof FourHundredResponse ||
+      response instanceof FiveHundredResponse
+    ) {
+      return res.status(response.errorCode).json(response);
+    } else {
+      return res.json(response);
+    }
+  };
 
   app.get("/v2/items/:id", async (req, res) => {
-    try {
-      const response = await searchController.getItem(
-        req.params.id,
-        queryParams(req),
-        elasticsearchIndex,
-      );
-      return res.send(response);
-      //todo should badresponse not be a reject
-    } catch (e: any) {
-      //todo should this crash
-      if (e.hasOwnProperty("message")) {
-        return res.status(500).json(e.message);
-      } else {
-        return res.status(500);
-      }
-    }
+    console.log("IN: /v2/items/:id");
+    const response = await searchController.getItem(
+      req.params.id,
+      queryParams(req),
+      elasticsearchIndex,
+    );
+
+    handleJsonResponses(response, res);
   });
 
   app.get("/v2/search", async (req, res) => {
-    try {
-      const response = await searchController.search(
-        queryParams(req),
-        elasticsearchIndex,
-      );
-      return res.send(response);
-    } catch (e: any) {
-      console.log("IN Catch", e);
-      if (e.hasOwnProperty("message")) {
-        return res.status(500).json(e.message);
-      } else {
-        return res.status(500);
-      }
-    }
+    const response = await searchController.search(
+      queryParams(req),
+      elasticsearchIndex,
+    );
+
+    handleJsonResponses(response, res);
   });
 
   app.listen(PORT, () => {
