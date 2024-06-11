@@ -167,6 +167,9 @@ function worker() {
     response: DPLADocList | FourHundredResponse | FiveHundredResponse,
     res: express.Response,
   ) => {
+    for (const [header, value] of Object.entries(securityHeaders)) {
+      res.setHeader(header, value);
+    }
     if (
       response instanceof FourHundredResponse ||
       response instanceof FiveHundredResponse
@@ -201,3 +204,16 @@ function worker() {
     console.log("Server is running on port", PORT);
   });
 }
+
+/*
+  Cribbed from https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html
+ */
+
+const securityHeaders = {
+  "Cache-Control": "no-store",
+  "Content-Security-Policy":
+    "default-src 'none'; script-src 'self'; frame-ancestors 'none'; form-action 'self'",
+  "Strict-Transport-Security": "max-age=16070400; includeSubDomains",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+};
