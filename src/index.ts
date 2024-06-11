@@ -17,6 +17,7 @@ import {
   FourHundredResponse,
   FiveHundredResponse,
 } from "./aggregation/responses";
+import ApiKeyRepository from "./aggregation/api_key_repository";
 
 const mustFork =
   process.env.MUST_FORK === "true" || process.env.NODE_ENV === "production";
@@ -51,6 +52,7 @@ function worker() {
   const dbUser = process.env.DB_USER;
   const dbPass = process.env.DB_PASS;
   const dbPort = parseInt(process.env.DB_PORT || "5432");
+  const dbQueryTimeout = parseInt(process.env.DB_QUERY_TIMEOUT || "10000");
   const elasticsearchUrl =
     process.env.ELASTIC_URL || "http://search.internal.dp.la:9200/";
   const elasticsearchIndex = process.env.ELASTIC_INDEX || "dpla_alias";
@@ -80,7 +82,41 @@ function worker() {
     user: dbUser,
     password: dbPass,
     port: dbPort,
+    query_timeout: dbQueryTimeout,
   });
+
+  const apiKeyRepository = new ApiKeyRepository(dbPool);
+
+  const authMiddleware = async (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    let apiKey = "";
+    if (req.headers["Authorization"]) {
+      apiKey = req.headers["Authorization"] as string;
+    } else if (req.query.api_key) {
+      if (typeof req.query.api_key === "string") {
+        apiKey = req.query.api_key;
+      } else if (
+        Array.isArray(req.query.api_key) &&
+        req.query.api_key.length > 0
+      ) {
+        apiKey = req.query.api_key[0] as string;
+      }
+    }
+
+    if (!apiKeyRepository.isApiKeyValid(apiKey)) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const user = await apiKeyRepository.findUserByApiKey(apiKey, dbPool);
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    next();
+  };
 
   const esClient: Client = new Client({
     node: elasticsearchUrl,
@@ -141,7 +177,7 @@ function worker() {
     }
   };
 
-  app.get(["/v2/items/:id", "/items/:id"], async (req, res) => {
+  app.get(["/v2/items/:id", "/items/:id"], authMiddleware, async (req, res) => {
     console.log("IN: /v2/items/:id");
     const response = await searchController.getItem(
       req.params.id,
@@ -152,7 +188,7 @@ function worker() {
     handleJsonResponses(response, res);
   });
 
-  app.get(["/v2/items", "/items"], async (req, res) => {
+  app.get(["/v2/items", "/items"], authMiddleware, async (req, res) => {
     const response = await searchController.search(
       queryParams(req),
       elasticsearchIndex,
