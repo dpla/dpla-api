@@ -215,7 +215,7 @@ function worker() {
     handleJsonResponses(response, res);
   });
 
-  app.post(["/v2/api_key/:email", "/api_key:email"], async (req, res) => {
+  app.post(["/v2/api_key/:email", "/api_key/:email"], async (req, res) => {
     const email = req.params.email;
     const response = await searchController.createApiKey(email);
     handleJsonResponses(response, res);
