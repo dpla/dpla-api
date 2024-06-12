@@ -16,8 +16,11 @@ import {
   DPLADocList,
   FourHundredResponse,
   FiveHundredResponse,
+  EmailSent,
 } from "./aggregation/responses";
 import ApiKeyRepository from "./aggregation/api_key_repository";
+import { SESClient } from "@aws-sdk/client-ses";
+import { Emailer } from "./aggregation/Emailer";
 
 const mustFork =
   process.env.MUST_FORK === "true" || process.env.NODE_ENV === "production";
@@ -56,6 +59,7 @@ function worker() {
   const elasticsearchUrl =
     process.env.ELASTIC_URL || "http://search.internal.dp.la:9200/";
   const elasticsearchIndex = process.env.ELASTIC_INDEX || "dpla_alias";
+  const emailFrom = process.env.EMAIL_FROM || "info@dp.la";
 
   const app: Application = express();
   app.use(morgan("tiny")); //http request logger
@@ -65,6 +69,7 @@ function worker() {
 
   let s3 = new S3Client(awsOptions);
   let sqs = new SQSClient(awsOptions);
+  let ses = new SESClient(awsOptions);
 
   if (xray) {
     const XRayExpress = AWSXRay.express;
@@ -74,6 +79,7 @@ function worker() {
     AWSXRay.captureHTTPsGlobal(https, true);
     sqs = AWSXRay.captureAWSClient(sqs);
     s3 = AWSXRay.captureAWSClient(s3);
+    ses = AWSXRay.captureAWSClient(ses);
   }
 
   const dbPool: Pool = new Pool({
@@ -84,6 +90,8 @@ function worker() {
     port: dbPort,
     query_timeout: dbQueryTimeout,
   });
+
+  const emailer = new Emailer(ses, emailFrom);
 
   const apiKeyRepository = new ApiKeyRepository(dbPool);
 
@@ -109,7 +117,7 @@ function worker() {
     if (!apiKeyRepository.isApiKeyValid(apiKey)) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const user = await apiKeyRepository.findUserByApiKey(apiKey, dbPool);
+    const user = await apiKeyRepository.findUserByApiKey(apiKey);
 
     if (!user) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -162,9 +170,17 @@ function worker() {
   });
 
   //SEARCH
-  const searchController = new SearchController(esClient);
+  const searchController = new SearchController(
+    esClient,
+    apiKeyRepository,
+    emailer,
+  );
   const handleJsonResponses = (
-    response: DPLADocList | FourHundredResponse | FiveHundredResponse,
+    response:
+      | DPLADocList
+      | EmailSent
+      | FourHundredResponse
+      | FiveHundredResponse,
     res: express.Response,
   ) => {
     for (const [header, value] of Object.entries(securityHeaders)) {
@@ -181,7 +197,6 @@ function worker() {
   };
 
   app.get(["/v2/items/:id", "/items/:id"], authMiddleware, async (req, res) => {
-    console.log("IN: /v2/items/:id");
     const response = await searchController.getItem(
       req.params.id,
       queryParams(req),
@@ -197,6 +212,12 @@ function worker() {
       elasticsearchIndex,
     );
 
+    handleJsonResponses(response, res);
+  });
+
+  app.post(["/v2/api_key/:email", "/api_key:email"], async (req, res) => {
+    const email = req.params.email;
+    const response = await searchController.createApiKey(email);
     handleJsonResponses(response, res);
   });
 
