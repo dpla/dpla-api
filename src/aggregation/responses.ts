@@ -30,6 +30,12 @@ export class FourHundredResponse {
   errorCode: number;
 }
 
+export class InvalidEmail extends FourHundredResponse {
+  constructor() {
+    super("Invalid email address.", 400);
+  }
+}
+
 export class UnrecognizedParameters extends FourHundredResponse {
   constructor(message: string) {
     super("Unrecognized parameters: " + message, 400);
@@ -46,6 +52,14 @@ export class TooManyIdentifiers extends FourHundredResponse {
   constructor(message: string) {
     super(message, 400);
   }
+}
+
+export class EmailSent {
+  constructor(email: string) {
+    this.message = `API key information sent to ${email}`;
+  }
+
+  message: string;
 }
 
 export class DPLADocList {

@@ -1,15 +1,29 @@
 services:
-#  db:
-#    image: postgres:12
-#    environment:
-#      - POSTGRES_DB=dpla_api
-#      - POSTGRES_USER=postgres
-#      - POSTGRES_PASSWORD=postgres
+  db:
+    image: postgres:12
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - ./db-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - dpla-api-internal
   app:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    environment:
+        - DB_HOST=db
+        - DB_NAME=postgres
+        - DB_USER=postgres
+        - DB_PASS=postgres
     volumes:
       - ./src:/app/src
+      - $HOME/.aws/credentials:/root/.aws/credentials:ro
     ports:
       - "8000:8000"
+    networks:
+      - dpla-api-internal
+networks:
+    dpla-api-internal:

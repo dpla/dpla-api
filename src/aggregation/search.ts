@@ -11,13 +11,26 @@ import {
   UnrecognizedParameters,
   DPLADocList,
   FiveHundredResponse,
+  InvalidEmail,
+  EmailSent,
 } from "./responses";
+import ApiKeyRepository from "./api_key_repository";
+import { createHash, getRandomValues } from "node:crypto";
+import { Emailer } from "./Emailer";
 
 export default class SearchController {
-  esClient: Client;
+  private esClient: Client;
+  private apiKeyRepository: ApiKeyRepository;
+  private emailer: Emailer;
 
-  constructor(esClient: Client) {
+  constructor(
+    esClient: Client,
+    apiKeyRepository: ApiKeyRepository,
+    emailer: Emailer,
+  ) {
     this.esClient = esClient;
+    this.apiKeyRepository = apiKeyRepository;
+    this.emailer = emailer;
   }
 
   public async getItem(
@@ -81,5 +94,51 @@ export default class SearchController {
     }
 
     return mapSearchResponse(response.body, query);
+  }
+
+  public async createApiKey(
+    email: string,
+  ): Promise<InvalidEmail | InternalErrorResponse | EmailSent> {
+    if (!this.apiKeyRepository.isValidEmail(email)) {
+      return new InvalidEmail();
+    }
+    const lookupUser = await this.apiKeyRepository.findUserByEmail(email);
+    let user = null;
+    if (lookupUser !== null) {
+      user = lookupUser;
+    } else {
+      const hash = createHash("md5");
+      hash.update(email);
+      hash.update(getRandomValues(new Uint8Array(32)));
+      const key = hash.digest("hex");
+      const staff = email.endsWith("@dp.la");
+      try {
+        await this.apiKeyRepository.createAccount(key, email, true, staff);
+      } catch (e: any) {
+        console.log("Caught error creating account for:", email, e);
+        return Promise.resolve(new InternalErrorResponse());
+      }
+      user = {
+        key,
+        email,
+        enabled: true,
+        staff,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+    }
+
+    try {
+      await this.emailer.sendEmail(
+        email,
+        "Your DPLA API Key",
+        `Your DPLA API key is: ${user.key}`,
+      );
+
+      return Promise.resolve(new EmailSent(email));
+    } catch (e: any) {
+      console.log("Caught error sending email to:", email, e);
+      return Promise.resolve(new InternalErrorResponse());
+    }
   }
 }
