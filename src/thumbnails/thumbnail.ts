@@ -228,7 +228,10 @@ export default class ThumbnailController {
 
   async getS3Url(id: string): Promise<string> {
     const params = { Bucket: this.bucket, Key: this.getS3Key(id) };
-    return getSignedUrl(this.s3, new GetObjectCommand(params));
+    // @smithy version bumps (CVE fixes) changed ServiceOutputTypes constraints,
+    // causing a false type incompatibility with getSignedUrl. Runtime is correct.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return getSignedUrl(this.s3 as any, new GetObjectCommand(params) as any);
   }
 
   async queueToThumbnailCache(id: string, url: string): Promise<void> {
