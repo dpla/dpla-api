@@ -16,6 +16,7 @@ import {
   DPLADocList,
   FourHundredResponse,
   FiveHundredResponse,
+  UnauthorizedResponse,
   EmailSent,
 } from "./aggregation/responses";
 import ApiKeyRepository from "./aggregation/api_key_repository";
@@ -115,12 +116,14 @@ function worker() {
     }
 
     if (!apiKeyRepository.isApiKeyValid(apiKey)) {
-      return res.status(401).json({ message: "Unauthorized" });
+      const r = new UnauthorizedResponse();
+      return res.status(r.errorCode).json(r);
     }
     const user = await apiKeyRepository.findUserByApiKey(apiKey);
 
     if (!user) {
-      return res.status(401).json({ message: "Unauthorized" });
+      const r = new UnauthorizedResponse();
+      return res.status(r.errorCode).json(r);
     }
 
     next();
@@ -136,14 +139,11 @@ function worker() {
 
   const queryParams = (req: express.Request): Map<string, string> => {
     const params = new Map<string, string>();
-    for (const key in Object.entries(req.query)) {
-      if (req.query.hasOwnProperty(key)) {
-        const value = req.query[key];
-        if (typeof value === "string") {
-          params.set(key, value);
-        } else if (Array.isArray(value)) {
-          params.set(key, value[0] as string);
-        }
+    for (const [key, value] of Object.entries(req.query)) {
+      if (typeof value === "string") {
+        params.set(key, value);
+      } else if (Array.isArray(value)) {
+        params.set(key, value[0] as string);
       }
     }
     return params;

@@ -1,56 +1,64 @@
-/**
- * It's not you, it's us.
- */
-export class FiveHundredResponse {
-  constructor(message: string, errorCode: number) {
+class ErrorResponse {
+  constructor(
+    message: string,
+    readonly errorCode: number,
+    error: string,
+  ) {
     this.message = message;
-    this.errorCode = errorCode;
+    this.error = error;
   }
 
   message: string;
-  errorCode: number;
-}
+  error: string;
 
-export class InternalErrorResponse extends FiveHundredResponse {
-  constructor() {
-    super("Internal error", 500);
+  toJSON() {
+    return { error: this.error, message: this.message };
   }
 }
 
 /**
  * It's not us, it's you.
  */
-export class FourHundredResponse {
-  constructor(message: string, errorCode: number) {
-    this.message = message;
-    this.errorCode = errorCode;
-  }
-
-  message: string;
-  errorCode: number;
-}
+export class FourHundredResponse extends ErrorResponse {}
 
 export class InvalidEmail extends FourHundredResponse {
   constructor() {
-    super("Invalid email address.", 400);
+    super("Invalid email address.", 400, "invalid_email");
   }
 }
 
 export class UnrecognizedParameters extends FourHundredResponse {
   constructor(message: string) {
-    super("Unrecognized parameters: " + message, 400);
+    super("Unrecognized parameters: " + message, 400, "unrecognized_parameters");
   }
 }
 
 export class InvalidParameter extends FourHundredResponse {
   constructor(message: string) {
-    super("Invalid parameter: " + message, 400);
+    super("Invalid parameter: " + message, 400, "invalid_parameter");
   }
 }
 
 export class TooManyIdentifiers extends FourHundredResponse {
   constructor(message: string) {
-    super(message, 400);
+    super(message, 400, "too_many_identifiers");
+  }
+}
+
+export class UnauthorizedResponse extends FourHundredResponse {
+  constructor() {
+    super("Unauthorized", 401, "unauthorized");
+  }
+}
+
+/**
+ * It's not you, it's us.
+ */
+export class FiveHundredResponse extends ErrorResponse {}
+
+export class InternalErrorResponse extends FiveHundredResponse {
+  constructor() {
+    super("Internal error", 500, "internal_error");
   }
 }
 
@@ -82,7 +90,7 @@ interface Facet {
   field: string;
   type: string;
   buckets: Bucket[];
-  bucketsLabel: String;
+  bucketsLabel: string;
 }
 
 interface Bucket {
